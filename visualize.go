@@ -145,3 +145,47 @@ func fillCell(img *image.RGBA, x, y, size int, c color.Color) {
 		}
 	}
 }
+
+// DrawPathOnOriginal overlay the path coordinates on the original image and saves it.
+func DrawPathOnOriginal(originalPath, outputPath string, path []Coordinate) error {
+	file, err := os.Open(originalPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return err
+	}
+
+	// Create a mutable copy of the image
+	bounds := img.Bounds()
+	newImg := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			newImg.Set(x, y, img.At(x, y))
+		}
+	}
+
+	// Color for path (Red)
+	solveColor := color.RGBA{255, 0, 0, 255}
+
+	// Draw path pixels
+	for _, coord := range path {
+		newImg.Set(coord.X, coord.Y, solveColor)
+	}
+
+	// Save the result
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if err := png.Encode(f, newImg); err != nil {
+		return err
+	}
+
+	return nil
+}

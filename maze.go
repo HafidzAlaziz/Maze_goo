@@ -38,30 +38,48 @@ func NewMaze(width, height int) *Maze {
 }
 
 // Generate uses Recursive Backtracking algorithm to carve paths.
-func (m *Maze) Generate() {
+func (m *Maze) Generate(difficulty string) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Start carving from (1, 1)
 	m.carve(1, 1)
 
-	// Set Start (0,0) and Finish (Width-1, Height-1)
-	// We ensure they are 0 (Path)
-	m.Grid[0][0] = 0
-	// Ensure a path from (0,0) to (1,1) if needed, 
-	// but (1,1) is already path. Let's make (0,1) or (1,0) path too.
-	m.Grid[0][1] = 0 // Entrance
-	
-	m.Grid[m.Height-1][m.Width-1] = 0
-	m.Grid[m.Height-1][m.Width-2] = 0 // Exit
+	// Braiding for Hard mode
+	if difficulty == "Hard" {
+		m.braid(0.05) // Probabilitas dikurangi agar lebih terstruktur (5%)
+	}
+}
+
+func (m *Maze) braid(p float64) {
+	for y := 1; y < m.Height-1; y++ {
+		for x := 1; x < m.Width-1; x++ {
+			if m.Grid[y][x] == 1 {
+				pathNeighbors := 0
+				if m.Grid[y-1][x] == 0 {
+					pathNeighbors++
+				}
+				if m.Grid[y+1][x] == 0 {
+					pathNeighbors++
+				}
+				if m.Grid[y][x-1] == 0 {
+					pathNeighbors++
+				}
+				if m.Grid[y][x+1] == 0 {
+					pathNeighbors++
+				}
+
+				if pathNeighbors >= 2 && rand.Float64() < p {
+					m.Grid[y][x] = 0
+				}
+			}
+		}
+	}
 }
 
 func (m *Maze) carve(x, y int) {
 	m.Grid[y][x] = 0 // Mark as path
 
-	// Directions: Left, Right, Up, Down (moving 2 units)
 	dirs := [][2]int{{-2, 0}, {2, 0}, {0, -2}, {0, 2}}
-	
-	// Shuffle directions
 	rand.Shuffle(len(dirs), func(i, j int) {
 		dirs[i], dirs[j] = dirs[j], dirs[i]
 	})
@@ -70,7 +88,6 @@ func (m *Maze) carve(x, y int) {
 		nx, ny := x+d[0], y+d[1]
 
 		if nx > 0 && nx < m.Width-1 && ny > 0 && ny < m.Height-1 && m.Grid[ny][nx] == 1 {
-			// Remove wall between current cell and next cell
 			m.Grid[y+d[1]/2][x+d[0]/2] = 0
 			m.carve(nx, ny)
 		}

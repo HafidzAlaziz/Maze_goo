@@ -2,87 +2,99 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"net/http"
+	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 )
 
+// GenerateRequest represents the expected payload for /generate
+type GenerateRequest struct {
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Difficulty string `json:"difficulty"`
+}
+
+// Coordinate represents a position in the maze
+type Coordinate struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// SolveRequest represents the expected payload for /solve
+type SolveRequest struct {
+	Grid  [][]int    `json:"grid"`
+	Start Coordinate `json:"start"`
+	End   Coordinate `json:"end"`
+}
+
 func main() {
-	// Menampilkan Menu Kesulitan
-	ClearTerminal()
-	fmt.Println("========================================")
-	fmt.Println("       MAZE SOLVER AI - PROYEK UAS      ")
-	fmt.Println("========================================")
-	fmt.Println("Pilih Tingkat Kesulitan:")
-	fmt.Println("1. Mudah (11x11)")
-	fmt.Println("2. Sedang (21x21)")
-	fmt.Println("3. Sulit (51x21 - Landscape)")
-	fmt.Print("\nMasukkan pilihan (1/2/3): ")
+	r := gin.Default()
 
-	var choice int
-	_, err := fmt.Scanln(&choice)
-	if err != nil {
-		fmt.Println("Input tidak valid. Menggunakan tingkat Sedang.")
-		choice = 2
-	}
+	// CORS Setup to allow React (Vite usually uses 5173, standard React uses 3000)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowMethods:     []string{"POST", "GET", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
-	// 1. Inisialisasi Dimensi Labirin Berdasarkan Pilihan
-	width, height := 21, 21
-	switch choice {
-	case 1:
-		width, height = 11, 11
-	case 2:
-		width, height = 21, 21
-	case 3:
-		width, height = 51, 21
-	default:
-		fmt.Println("Pilihan tidak ada. Menggunakan tingkat Sedang.")
-	}
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "pong"})
+	})
 
-	// Persiapan Animasi
-	HideCursor()
-	defer ShowCursor()
-	ClearTerminal()
+	// Endpoint: POST /generate
+	r.POST("/generate", func(c *gin.Context) {
+		var req GenerateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
+			return
+		}
 
-	fmt.Printf("Menghasilkan Labirin Acak (%dx%d)...\n", width, height)
-	fmt.Println("Tingkat Kesulitan:", map[int]string{1: "Mudah", 2: "Sedang", 3: "Sulit"}[choice])
+		fmt.Printf("Generating Maze: Width=%d, Height=%d, Difficulty=%s\n", req.Width, req.Height, req.Difficulty)
 
-	// 2. Maze Generation: Membuat labirin menggunakan algoritma Recursive Backtracking
-	// Algoritma ini menjamin semua area terhubung dan memiliki satu jalur unik (sebelum kita modifikasi)
-	maze := NewMaze(width, height)
-	maze.Generate()
+		// Ensure dimensions are odd
+		if req.Width%2 == 0 {
+			req.Width++
+		}
+		if req.Height%2 == 0 {
+			req.Height++
+		}
 
-	// 3. Pathfinding: Mencari jalur terpendek menggunakan algoritma A* (A-Star) dengan Animasi
-	// Algoritma ini menggunakan Heuristic Manhattan Distance untuk efisiensi pencarian
-	fmt.Println("Mencari jalur tercepat dengan Algoritma A*...")
+		maze := NewMaze(req.Width, req.Height)
+		maze.Generate(req.Difficulty)
 
-	// Callback untuk visualisasi live di terminal
-	animationCallback := func(closedSet map[string]bool, current *Node) {
-		LivePrint(maze, closedSet, current)
-	}
+		c.JSON(http.StatusOK, gin.H{
+			"width":  maze.Width,
+			"height": maze.Height,
+			"grid":   maze.Grid,
+		})
+	})
 
-	path := SolveAStar(maze.Grid, 0, 0, maze.Width-1, maze.Height-1, animationCallback)
+	r.POST("/solve", func(c *gin.Context) {
+		var req SolveRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid grid or coordinates"})
+			return
+		}
 
-	// Tampilkan kembali kursor dan geser ke bawah hasil animasi
-	ShowCursor()
-	fmt.Println("\n\nSelesai mencari jalur!")
+		pathNodes := SolveAStar(req.Grid, req.Start.X, req.Start.Y, req.End.X, req.End.Y, nil)
+		if pathNodes == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No path found"})
+			return
+		}
 
-	if path == nil {
-		log.Fatal("Gagal menemukan jalur dari Start ke Finish.")
-	}
+		path := make([]Coordinate, len(pathNodes))
+		for i, n := range pathNodes {
+			path[i] = Coordinate{X: n.X, Y: n.Y}
+		}
 
-	// 4. Output Visualisasi: Terminal (ASCII)
-	// Berguna untuk pengecekan cepat di lingkungan command line
-	fmt.Println("\nVisualisasi Akhir di Terminal:")
-	PrintTerminal(maze, path)
+		c.JSON(http.StatusOK, gin.H{"path": path})
+	})
 
-	// 5. Output Visualisasi: File PNG
-	// Mengekspor labirin ke gambar dengan jalur berwarna merah
-	outputFile := "maze_result.png"
-	cellSize := 20 // Ukuran piksel per sel labirin
-	err = ExportPNG(outputFile, maze, path, cellSize)
-	if err != nil {
-		log.Fatalf("Gagal mengekspor gambar: %v", err)
-	}
-
-	fmt.Printf("\nBerhasil! Hasil labirin telah disimpan ke: %s\n", outputFile)
-	fmt.Println("Jalur tercepat ditandai dengan warna MERAH pada file gambar.")
+	// Jalankan di port 8080
+	r.Run(":8080")
 }
