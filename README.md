@@ -9,7 +9,9 @@ Langkah-langkah:
    go run .
    
 Server akan berjalan di port 8080.
+
 3.	Jalankan Frontend: Masuk ke folder frontend, buka terminal baru, ketik
+   
     npm install lalu npm run dev
     
 5.	Buka Browser: Kunjungi alamat http://localhost:5173.
