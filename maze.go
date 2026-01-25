@@ -26,7 +26,7 @@ func NewMaze(width, height int) *Maze {
 	for i := range grid {
 		grid[i] = make([]int, width)
 		for j := range grid[i] {
-			grid[i][j] = 1 // All walls initially
+			grid[i][j] = 1 //Inisialisasi semua sebagai dinding
 		}
 	}
 
@@ -77,7 +77,7 @@ func (m *Maze) braid(p float64) {
 }
 
 func (m *Maze) carve(x, y int) {
-	m.Grid[y][x] = 0 // Mark as path
+	m.Grid[y][x] = 0 // Sebagai jalan
 
 	dirs := [][2]int{{-2, 0}, {2, 0}, {0, -2}, {0, 2}}
 	rand.Shuffle(len(dirs), func(i, j int) {
